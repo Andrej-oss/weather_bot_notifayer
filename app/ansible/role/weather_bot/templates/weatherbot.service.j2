@@ -1,0 +1,14 @@
+[Unit]
+Description=Weather Telegram Bot
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/weather-bot
+Environment="TELEGRAM_BOT_TOKEN={{ telegram_bot_token }}"
+Environment="OWM_API_KEY={{ owm_api_key }}"
+ExecStart=/home/ubuntu/weather-bot/.venv/bin/python3 /home/ubuntu/weather-bot/app/__main__.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

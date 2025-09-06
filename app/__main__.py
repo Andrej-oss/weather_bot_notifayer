@@ -1,9 +1,12 @@
 import asyncio, os
+from datetime import timedelta
+
 from telegram.ext import Application, CommandHandler
 import pytz
 from dotenv import load_dotenv
 import nest_asyncio
 
+from app.data.cache.cache_storage import CacheStorage
 from app.data.subscribers_storage import SubscribersStorage
 from app.handler.telegram_handler import TelegramHandlers
 from app.service.scheduler.telegram_scheduler import Scheduler
@@ -18,6 +21,8 @@ WIND_THRESHOLD_MS = float(os.environ.get("WIND_THRESHOLD_MS", 5.0))
 SEND_HOUR_LOCAL = int(os.environ.get("SEND_HOUR_LOCAL", 20))
 OWM_API_KEY = os.environ["OWM_API_KEY"]
 
+cache = CacheStorage("owm_cache.json", ttl=timedelta(hours=3))
+
 
 async def main():
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -27,17 +32,19 @@ async def main():
     app = Application.builder().token(token).build()
 
     storage = SubscribersStorage(SUBSCRIBERS_DB)
-    handlers = TelegramHandlers(storage, PLACE_NAME, LAT, LON, OWM_API_KEY, WIND_THRESHOLD_MS, TIMEZONE)
+    handlers = TelegramHandlers(storage, PLACE_NAME, LAT, LON, OWM_API_KEY, WIND_THRESHOLD_MS, TIMEZONE, cache)
 
     app.add_handler(CommandHandler("start", handlers.start))
     app.add_handler(CommandHandler("stop", handlers.stop))
     app.add_handler(CommandHandler("now", handlers.now))
 
-    scheduler = Scheduler(app, None, TIMEZONE, SEND_HOUR_LOCAL)
-    # тут можна під'єднати scheduled_job так само як now
+    # 🔥 тут вже job_queue гарантовано існує
+    scheduler = Scheduler(app, handlers.scheduled_job, TIMEZONE, SEND_HOUR_LOCAL)
+    scheduler.schedule()
 
     print("Бот запущений.")
     await app.run_polling(close_loop=False)
+
 
 if __name__ == "__main__":
     nest_asyncio.apply()
@@ -47,4 +54,3 @@ if __name__ == "__main__":
         loop.run_until_complete(main())
     except (KeyboardInterrupt, SystemExit):
         print("Зупинено.")
-
